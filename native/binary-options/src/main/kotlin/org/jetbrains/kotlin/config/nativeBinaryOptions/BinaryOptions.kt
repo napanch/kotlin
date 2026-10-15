@@ -118,6 +118,8 @@ object BinaryOptions : BinaryOptionRegistry() {
 
     val cCallMode by option<CCallMode>()
 
+    val compressedRefs by booleanOption()
+
     /**
      * Generate a macOS Catalyst binary for the given architecture
      */
