@@ -481,6 +481,30 @@ internal class CodeGeneratorVisitor(
 
     //-------------------------------------------------------------------------//
 
+    private fun createPermanentRefFixupsInitializer(): LlvmCallable? {
+        val fixups = codegen.staticData.permanentRefFixups
+        if (fixups.isEmpty()) return null
+        val fixupType = llvm.runtime.permanentRefFixupType
+
+        val table = codegen.staticData.createGlobal(LLVMArrayType(fixupType, fixups.size)!!, "permanent_ref_fixups")
+        val tableAddress = LLVMConstPtrToInt(table.llvmGlobal, llvm.int64Type)!!
+        fun offsetInTable(value: ConstValue) =
+                constValue(LLVMConstTrunc(LLVMConstSub(LLVMConstPtrToInt(value.llvm, llvm.int64Type), tableAddress), llvm.int32Type)!!)
+        table.setInitializer(ConstArray(fixupType, fixups.map { Struct(fixupType, offsetInTable(it.slot), offsetInTable(it.target)) }))
+        table.setConstant(true)
+
+        val node = Struct(llvm.runtime.permanentRefFixupNodeType, table.pointer, llvm.constInt64(fixups.size.toLong()), null)
+        val nodePtr = codegen.staticData.placeGlobal("permanent_ref_fixup_node", node).llvmGlobal
+
+        val proto = ctorFunctionSignature.toProto("", null, LLVMLinkage.LLVMPrivateLinkage)
+        return generateFunctionNoRuntime(codegen, proto) {
+            call(llvm.appendPermanentRefFixups, listOf(nodePtr))
+            ret(null)
+        }
+    }
+
+    //-------------------------------------------------------------------------//
+
     override fun visitFile(declaration: IrFile) {
         @Suppress("UNCHECKED_CAST")
         using(FileScope(declaration, declaration.fileEntry)) {
@@ -2757,6 +2781,8 @@ internal class CodeGeneratorVisitor(
 
     //-------------------------------------------------------------------------//
     fun appendStaticInitializers() {
+        createPermanentRefFixupsInitializer()?.let { llvm.otherStaticInitializers += it }
+
         // Note: the list of libraries is topologically sorted (in order for initializers to be called correctly).
         val dependencies = (generationState.dependenciesTracker.allBitcodeDependencies + listOf(null)/* Null for "current" non-library module */)
 

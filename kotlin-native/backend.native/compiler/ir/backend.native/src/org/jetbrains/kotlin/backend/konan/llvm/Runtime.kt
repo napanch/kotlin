@@ -54,6 +54,9 @@ internal class Runtime(
     val frameOverlayType = getStructType("FrameOverlay")
 
     val initNodeType = getStructType("InitNode")
+    
+    val permanentRefFixupType = getStructType("PermanentRefFixup")
+    val permanentRefFixupNodeType = getStructType("PermanentRefFixupNode")
 
     val target = LLVMGetTarget(llvmModule)!!.toKString()
 
