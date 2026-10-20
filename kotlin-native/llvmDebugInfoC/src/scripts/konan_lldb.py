@@ -136,6 +136,17 @@ def _symbol_loaded_address(name, debugger=lldb.debugger):
     return 0
 
 
+# Binaries built by older compilers have no Konan_DebugGetFieldReference, references are read from memory there.
+_FIELD_REFERENCE_SUPPORT = {}
+
+
+def _has_field_reference(target):
+    key = target.GetExecutable().fullpath
+    if key not in _FIELD_REFERENCE_SUPPORT:
+        _FIELD_REFERENCE_SUPPORT[key] = target.FindFunctions("Konan_DebugGetFieldReference").GetSize() > 0
+    return _FIELD_REFERENCE_SUPPORT[key]
+
+
 def _type_info_by_address(address, debugger=lldb.debugger):
     target = debugger.GetSelectedTarget()
     process = target.GetProcess()
@@ -345,6 +356,17 @@ class KonanHelperProvider(lldb.SBSyntheticValueProvider):
         self._log.debug(
             "[%s, type:%s, address:%s]", index, value_type, _hex(address)
         )
+        if int(value_type) == 1 and _has_field_reference(self._target):
+            # References inside objects may be compressed, so they are read by the runtime.
+            reference = _evaluate(
+                f"(void *)Konan_DebugGetFieldReference({_hex(self._valobj.unsigned)}, {index})"
+            ).unsigned
+            data = lldb.SBData.CreateDataFromUInt64Array(
+                self._process.GetByteOrder(), self._process.GetAddressByteSize(), [reference]
+            )
+            return self._valobj.CreateValueFromData(
+                str(self._field_name(index)), data, self._valobj.GetType()
+            )
         return _TYPE_CONVERSION[int(value_type)](
             self, self._valobj, address, str(self._field_name(index))
         )
