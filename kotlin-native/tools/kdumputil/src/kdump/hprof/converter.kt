@@ -38,6 +38,7 @@ fun MemoryDump.newConverter(): Converter =
         Converter(
                 endianness = endianness,
                 idSize = idSize,
+                refEncoding = refEncoding,
                 idToItemMap = idToItemMap,
         )
 
@@ -47,6 +48,7 @@ fun MemoryDump.toHProfProfile(): HProfProfile =
 class Converter(
         private val endianness: Endianness,
         private val idSize: IdSize,
+        private val refEncoding: RefEncoding?,
         private val idToItemMap: Map<Id, Item>,
 ) {
     private val profileTime: Long = System.currentTimeMillis()
@@ -69,7 +71,9 @@ class Converter(
     fun hprofByteArray(fn: HProfWriter.() -> Unit): ByteArray =
             ByteArrayOutputStream().apply { hprofWriter().fn() }.toByteArray()
 
-    fun size(type: RuntimeType): Int = type.size(idSize)
+    private val refSize: Int = if (refEncoding != null) 4 else idSize.byteCount
+
+    fun size(type: RuntimeType): Int = type.size(refSize)
 
     fun hprofInstanceSize(typeId: Id, objectTypeBody: Type.Body.Object): Int =
             fields(typeId, objectTypeBody).fold(0) { acc, field ->
@@ -77,12 +81,18 @@ class Converter(
             }
 
     fun getId(byteArray: ByteArray, offset: Int): Id =
-            when (idSize) {
+            if (refEncoding != null) getCompressedId(byteArray, offset, refEncoding)
+            else when (idSize) {
                 IdSize.BITS_8 -> id(byteArray.getByte(offset))
                 IdSize.BITS_16 -> id(byteArray.getShort(offset, endianness))
                 IdSize.BITS_32 -> id(byteArray.getInt(offset, endianness))
                 IdSize.BITS_64 -> id(byteArray.getLong(offset, endianness))
             }
+
+    private fun getCompressedId(byteArray: ByteArray, offset: Int, refEncoding: RefEncoding): Id {
+        val value = byteArray.getIntLong(offset, endianness)
+        return if (value == 0L) Id(0) else Id(refEncoding.base.long + (value shl refEncoding.shift))
+    }
 
     fun HProfWriter.writeObjectValue(byteArray: ByteArray, offset: Int) {
         write(hprofObjectReferenceId(getId(byteArray, offset)))
@@ -264,7 +274,7 @@ class Converter(
             type.superTypeId.takeIf { it.long != 0L }?.let { type(it) }
 
     fun syntheticFields(typeId: Id, objectTypeBody: Type.Body.Object): List<Field> =
-            typeIdToSyntheticFieldsMap.getOrPut(typeId) { objectTypeBody.buildSyntheticFields(idSize) }
+            typeIdToSyntheticFieldsMap.getOrPut(typeId) { objectTypeBody.buildSyntheticFields(refSize) }
 
     fun fields(typeId: Id, objectTypeBody: Type.Body.Object): List<Field> =
             objectTypeBody.debug?.fields ?: syntheticFields(typeId, objectTypeBody)

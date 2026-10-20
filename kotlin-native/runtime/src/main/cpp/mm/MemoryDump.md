@@ -35,6 +35,20 @@
 - id_size (u8): 1, 2, 4 or 8 (usually 8)
 ```
 
+With compressed references, the header is `Kotlin/Native dump 1.0.9` and has two more fields:
+
+```
+- header_string (str) = `Kotlin/Native dump 1.0.9`
+- endianness (u8): 0 = big endian, 1 = little endian
+- id_size (u8): 1, 2, 4 or 8 (usually 8)
+- ref_base (id): base of the compressed references window
+- ref_shift (u8): shift of the compressed references encoding, usually 3
+```
+
+In this case references inside `object_data` and `element_data` are stored as 4-byte unsigned values:
+`0` is `null`, and any other value `c` is the object with ID `ref_base + (c << ref_shift)`.
+Without compressed references, they are IDs of `id_size` bytes.
+
 ### Blocks
 
 #### TYPE

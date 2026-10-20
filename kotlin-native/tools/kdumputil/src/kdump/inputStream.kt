@@ -26,22 +26,25 @@ fun InputStream.readIdSize(): IdSize {
     }
 }
 
+private const val HEADER = "Kotlin/Native dump 1.0.8"
+private const val COMPRESSED_REFS_HEADER = "Kotlin/Native dump 1.0.9"
+
 fun InputStream.readDump(): MemoryDump {
     val headerString = readCString().also {
-        "Kotlin/Native dump 1.0.8".let { header ->
-            if (it != header) {
-                throw IOException("invalid header \"$it\", expected \"$header\"")
-            }
+        if (it != HEADER && it != COMPRESSED_REFS_HEADER) {
+            throw IOException("invalid header \"$it\", expected \"$HEADER\" or \"$COMPRESSED_REFS_HEADER\"")
         }
     }
     val endianness = readEndianness()
     val idSize = readIdSize()
     val reader = Reader(this, endianness, idSize)
+    val refEncoding = if (headerString == COMPRESSED_REFS_HEADER) reader.readRefEncoding() else null
     val items = reader.readList { readItem() }
     return MemoryDump(
             headerString = headerString,
             endianness = endianness,
             idSize = idSize,
+            refEncoding = refEncoding,
             items = items,
     )
 }

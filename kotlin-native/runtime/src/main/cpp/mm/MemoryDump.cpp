@@ -11,6 +11,7 @@
 #include <unordered_set>
 #include <queue>
 
+#include "CompressedRefs.hpp"
 #include "Porting.h"
 #include "TypeInfo.h"
 #include "KString.h"
@@ -32,9 +33,13 @@ public:
     void Dump() {
         RuntimeLogInfo({kTagMemDump}, "Starting to dump memory into %p", file_);
 
-        DumpStr("Kotlin/Native dump 1.0.8");
+        DumpStr(compiler::compressedRefs() ? "Kotlin/Native dump 1.0.9" : "Kotlin/Native dump 1.0.8");
         DumpBool(konan::isLittleEndian());
         DumpU8(sizeof(void*));
+        if (compiler::compressedRefs()) {
+            DumpId(reinterpret_cast<const void*>(mm::compressedRefsBase()));
+            DumpU8(mm::kCompressedRefsShift);
+        }
 
         RuntimeLogInfo({kTagMemDump}, "Dumping global roots");
         for (auto value : mm::GlobalRootSet()) {

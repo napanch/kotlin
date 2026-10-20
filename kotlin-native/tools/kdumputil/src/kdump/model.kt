@@ -25,10 +25,16 @@ enum class RuntimeType {
 @JvmInline
 value class Id(val long: Long)
 
+data class RefEncoding(
+        val base: Id,
+        val shift: Int,
+)
+
 data class MemoryDump(
         val headerString: String,
         val endianness: Endianness,
         val idSize: IdSize,
+        val refEncoding: RefEncoding?,
         val items: List<Item>,
 )
 

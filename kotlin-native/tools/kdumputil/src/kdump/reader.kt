@@ -39,6 +39,12 @@ fun Reader.readId(): Id =
 fun Reader.readByteArray(size: Int): ByteArray =
         inputStream.readByteArray(size)
 
+fun Reader.readRefEncoding(): RefEncoding {
+    val base = readId()
+    val shift = readByteInt()
+    return RefEncoding(base, shift)
+}
+
 fun <T> Reader.readList(fn: Reader.() -> T): List<T> =
         PushbackInputStream(inputStream).readList {
             copy(inputStream = this).fn()

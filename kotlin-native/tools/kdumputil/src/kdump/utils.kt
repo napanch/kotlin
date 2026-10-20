@@ -16,9 +16,9 @@ fun id(short: Short) = Id(short.toLongUnsigned())
 fun id(int: Int) = Id(int.toLongUnsigned())
 fun id(long: Long) = Id(long)
 
-fun RuntimeType.size(idSize: IdSize): Int =
+fun RuntimeType.size(refSize: Int): Int =
         when (this) {
-            RuntimeType.OBJECT -> idSize.byteCount
+            RuntimeType.OBJECT -> refSize
             RuntimeType.INT_8 -> 1
             RuntimeType.INT_16 -> 2
             RuntimeType.INT_32 -> 4
@@ -64,7 +64,7 @@ val MemoryDump.idToItemMap: Map<Id, Item>
 private fun buildFieldsFromObjectOffsets(
         objectOffsets: IntArray,
         objectSize: Int,
-        idSize: IdSize,
+        refSize: Int,
 ): List<Field> {
     var offset = 0
     var dataFieldIndex = 0
@@ -73,7 +73,7 @@ private fun buildFieldsFromObjectOffsets(
     return buildList {
         fun addObjectField() {
             add(Field(offset, RuntimeType.OBJECT, "object_$objectFieldIndex"))
-            offset += idSize.byteCount
+            offset += refSize
             objectFieldIndex += 1
         }
 
@@ -107,5 +107,5 @@ private fun buildFieldsFromObjectOffsets(
     }
 }
 
-fun Type.Body.Object.buildSyntheticFields(idSize: IdSize): List<Field> =
-        buildFieldsFromObjectOffsets(objectOffsets, instanceSize, idSize)
+fun Type.Body.Object.buildSyntheticFields(refSize: Int): List<Field> =
+        buildFieldsFromObjectOffsets(objectOffsets, instanceSize, refSize)
