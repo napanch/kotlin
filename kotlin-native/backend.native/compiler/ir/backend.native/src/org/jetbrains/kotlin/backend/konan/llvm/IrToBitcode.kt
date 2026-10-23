@@ -1872,7 +1872,7 @@ internal class CodeGeneratorVisitor(
                         require(value.type.toLLVMType(llvm) == llvm.pointerType) {
                             "Can't wrap ${value.value.kind.asString} constant to type ${value.type.render()}"
                         }
-                        value.toBoxCacheValue(generationState) ?: codegen.staticData.createConstKotlinObject(
+                        value.toBoxCacheValue(generationState) ?: codegen.staticData.createConstKotlinBox(
                                 constructedType.getClass()!!,
                                 evaluateConst(value.value)
                         )

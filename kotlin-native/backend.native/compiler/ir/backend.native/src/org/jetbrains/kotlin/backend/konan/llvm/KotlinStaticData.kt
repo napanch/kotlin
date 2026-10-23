@@ -121,6 +121,8 @@ internal class KotlinStaticData(override val generationState: NativeGenerationSt
         return createConstant(value, refs)
     }
 
+    fun createConstKotlinBox(type: IrClass, value: ConstValue) = createConstant(createConstKotlinObjectBody(type, value))
+
     fun createConstKotlinObjectBody(type: IrClass, vararg fields: ConstValue): ConstValue {
         // TODO: handle padding here
         return llvm.struct(objHeader(type.typeInfoPtr), *fields)
