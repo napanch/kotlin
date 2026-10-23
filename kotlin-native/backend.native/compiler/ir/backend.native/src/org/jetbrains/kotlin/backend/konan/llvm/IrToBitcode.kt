@@ -2781,7 +2781,8 @@ internal class CodeGeneratorVisitor(
 
     //-------------------------------------------------------------------------//
     fun appendStaticInitializers() {
-        createPermanentRefFixupsInitializer()?.let { llvm.otherStaticInitializers += it }
+        val permanentRefFixupsInitializer = createPermanentRefFixupsInitializer()
+        val permanentRefFixupsLibrary = context.config.libraryToCache?.klib
 
         // Note: the list of libraries is topologically sorted (in order for initializers to be called correctly).
         val dependencies = (generationState.dependenciesTracker.allBitcodeDependencies + listOf(null)/* Null for "current" non-library module */)
@@ -2818,9 +2819,10 @@ internal class CodeGeneratorVisitor(
 
             if (library == null || generationState.llvmModuleSpecification.containsLibrary(library)) {
                 val otherInitializers = llvm.otherStaticInitializers.takeIf { library == null }.orEmpty()
+                val fixupsInitializer = permanentRefFixupsInitializer.takeIf { library == permanentRefFixupsLibrary }
 
                 listOf(
-                    appendStaticInitializers(ctorProto(ctorName), listOfNotNull(initializer) + otherInitializers)
+                    appendStaticInitializers(ctorProto(ctorName), listOfNotNull(initializer, fixupsInitializer) + otherInitializers)
                 )
             } else {
                 // A cached library.
