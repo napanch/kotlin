@@ -11,12 +11,17 @@ import org.jetbrains.kotlin.fir.analysis.checkers.MppCheckerKind
 import org.jetbrains.kotlin.fir.analysis.checkers.context.CheckerContext
 import org.jetbrains.kotlin.fir.analysis.checkers.expression.FirFunctionCallChecker
 import org.jetbrains.kotlin.fir.analysis.diagnostics.native.FirNativeErrors
-import org.jetbrains.kotlin.fir.backend.native.interop.isVariadicObjCMethod
+import org.jetbrains.kotlin.fir.backend.native.interop.isCFunctionOrGlobalAccessor
+import org.jetbrains.kotlin.fir.backend.native.interop.isObjCMethod
+import org.jetbrains.kotlin.fir.declarations.isArrayOfCall
 import org.jetbrains.kotlin.fir.expressions.FirFunctionCall
+import org.jetbrains.kotlin.fir.expressions.FirSpreadArgumentExpression
 import org.jetbrains.kotlin.fir.expressions.FirVarargArgumentsExpression
 import org.jetbrains.kotlin.fir.expressions.resolvedArgumentMapping
 import org.jetbrains.kotlin.fir.expressions.toResolvedCallableSymbol
+import org.jetbrains.kotlin.fir.resolve.fullyExpandedType
 import org.jetbrains.kotlin.fir.symbols.impl.FirFunctionSymbol
+import org.jetbrains.kotlin.fir.types.isNullableString
 import org.jetbrains.kotlin.fir.types.isString
 import org.jetbrains.kotlin.fir.types.resolvedType
 
@@ -24,16 +29,38 @@ internal object FirNativeObjCStringAsVariadicChecker : FirFunctionCallChecker(Mp
     context(context: CheckerContext, reporter: DiagnosticReporter)
     override fun check(expression: FirFunctionCall) {
         val symbol = expression.toResolvedCallableSymbol() as? FirFunctionSymbol<*> ?: return
-        if (!symbol.isVariadicObjCMethod(context.session)) return
+        if (symbol.valueParameterSymbols.none { it.isVararg }) return
 
+        val isObjC = symbol.isObjCMethod(context.session)
+        if (!isObjC && !symbol.isCFunctionOrGlobalAccessor(context.session)) return
+
+        checkVarargArguments(expression, isObjC)
+    }
+
+    context(context: CheckerContext, reporter: DiagnosticReporter)
+    private fun checkVarargArguments(expression: FirFunctionCall, isObjC: Boolean) {
         val argumentMapping = expression.resolvedArgumentMapping ?: return
         for ([argument, parameter] in argumentMapping) {
             if (parameter.isVararg && argument is FirVarargArgumentsExpression) {
                 for (element in argument.arguments) {
-                    if (element.resolvedType.isString) {
+                    if (element is FirSpreadArgumentExpression) {
+                        val spreadExpression = element.expression
+                        if (!isObjC && spreadExpression is FirFunctionCall && spreadExpression.isArrayOfCall()) {
+                            checkVarargArguments(spreadExpression, isObjC)
+                        }
+                        continue
+                    }
+
+                    val type = element.resolvedType.fullyExpandedType()
+                    if (type.isString || type.isNullableString) {
+                        val diagnostic = if (isObjC) {
+                            FirNativeErrors.STRING_AS_VARIADIC_OBJC_PARAM_IS_AMBIGUOUS
+                        } else {
+                            FirNativeErrors.STRING_AS_VARIADIC_C_ARGUMENT
+                        }
                         reporter.reportOn(
                             element.source,
-                            FirNativeErrors.STRING_AS_VARIADIC_OBJC_PARAM_IS_AMBIGUOUS,
+                            diagnostic,
                             context
                         )
                     }
